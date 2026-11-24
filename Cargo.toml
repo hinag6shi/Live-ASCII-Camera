@@ -1,0 +1,10 @@
+[package]
+name = "ascii-virtual-camera"
+version = "0.1.0"
+edition = "2021"
+description = "Turn a camera feed into an ASCII-art Linux virtual camera"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+font8x8 = "0.3"
