@@ -1,0 +1,50 @@
+name: Linux release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-linux-x86_64:
+    name: Build Linux x86_64 release
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check tag matches Cargo version
+        shell: bash
+        run: |
+          cargo_version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "ascii-virtual-camera") | .version')"
+          test "$GITHUB_REF_NAME" = "v$cargo_version"
+
+      - name: Build optimized binary
+        run: cargo build --locked --release
+
+      - name: Package binary and guide
+        shell: bash
+        run: |
+          mkdir -p dist/package
+          cp target/release/ascii-virtual-camera dist/package/
+          cp README.md dist/package/
+          archive="ascii-virtual-camera-${GITHUB_REF_NAME}-linux-x86_64.tar.gz"
+          tar -czf "dist/$archive" -C dist/package ascii-virtual-camera README.md
+          cd dist
+          sha256sum "$archive" > "$archive.sha256"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          "dist/ascii-virtual-camera-${GITHUB_REF_NAME}-linux-x86_64.tar.gz"
+          "dist/ascii-virtual-camera-${GITHUB_REF_NAME}-linux-x86_64.tar.gz.sha256"
+          --title "ASCII Virtual Camera $GITHUB_REF_NAME"
+          --generate-notes
