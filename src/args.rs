@@ -39,9 +39,9 @@ pub struct Args {
     /// Character cell size in pixels
     #[arg(long, default_value_t = 8)]
     pub cell: usize,
-    /// Color treatment for rendered glyphs
-    #[arg(long, value_enum, default_value_t = ColorStyle::Camera)]
-    pub color: ColorStyle,
+    /// Custom glyph tint as three RGB components (0..255)
+    #[arg(long, num_args = 3, value_parser = clap::value_parser!(u8))]
+    pub rgb: Option<Vec<u8>>,
     /// Mirror the rendered image horizontally
     #[arg(long)]
     pub mirror: bool,
@@ -57,27 +57,6 @@ pub struct Args {
     /// Config file path (defaults to ~/.config/ascii-virtual-camera/config)
     #[arg(long)]
     pub config: Option<String>,
-}
-
-#[derive(Clone, Copy, Debug, ValueEnum)]
-pub enum ColorStyle {
-    Camera,
-    Green,
-    Amber,
-    Blue,
-    Gray,
-}
-
-impl ColorStyle {
-    pub fn next(self) -> Self {
-        match self {
-            Self::Camera => Self::Green,
-            Self::Green => Self::Amber,
-            Self::Amber => Self::Blue,
-            Self::Blue => Self::Gray,
-            Self::Gray => Self::Camera,
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -106,6 +85,6 @@ pub struct Settings {
     pub brightness: f32,
     pub mirror: bool,
     pub invert: bool,
-    pub color: ColorStyle,
+    pub custom_color: Option<[u8; 3]>,
     pub ramp: Vec<char>,
 }

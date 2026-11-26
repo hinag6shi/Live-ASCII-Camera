@@ -19,7 +19,39 @@ use std::{
 struct Controls {
     running: bool,
     camera_change: bool,
+    selected_input: Option<String>,
     pending_snapshots: Vec<PathBuf>,
+}
+
+fn set_usize(command: &str, key: &str, min: usize, max: usize, setting: &mut usize) {
+    match command
+        .strip_prefix(&format!("{key} "))
+        .unwrap_or_default()
+        .parse::<usize>()
+    {
+        Ok(value) if (min..=max).contains(&value) => *setting = value,
+        _ => eprintln!("{key} must be an integer from {min} to {max}"),
+    }
+}
+
+fn set_float(command: &str, key: &str, min: f32, max: f32, setting: &mut f32) {
+    match command
+        .strip_prefix(&format!("{key} "))
+        .unwrap_or_default()
+        .parse::<f32>()
+    {
+        Ok(value) if value.is_finite() && (min..=max).contains(&value) => *setting = value,
+        _ => eprintln!("{key} must be a number from {min} to {max}"),
+    }
+}
+
+fn set_toggle(command: &str, key: &str, setting: &mut bool) {
+    match command.strip_prefix(&format!("{key} ")).unwrap_or_default() {
+        "on" | "true" => *setting = true,
+        "off" | "false" => *setting = false,
+        "toggle" => *setting = !*setting,
+        _ => eprintln!("use {key} on, {key} off, or {key} toggle"),
+    }
 }
 
 fn parse_snapshot_command(command: &str) -> Option<Option<&str>> {
@@ -28,6 +60,36 @@ fn parse_snapshot_command(command: &str) -> Option<Option<&str>> {
     } else {
         command.strip_prefix("shot ").map(|path| Some(path.trim()))
     }
+}
+
+fn set_color(value: &str, settings: &mut Settings) -> Result<()> {
+    let mut parts = value.split_whitespace();
+    let first = parts
+        .next()
+        .context("color expects 'camera' or three RGB values")?;
+    match first {
+        "camera" if parts.next().is_none() => {
+            settings.custom_color = None;
+        }
+        _ => {
+            let mut rgb = [0u8; 3];
+            rgb[0] = first
+                .parse()
+                .context("RGB values must be integers from 0 to 255")?;
+            for component in &mut rgb[1..] {
+                *component = parts
+                    .next()
+                    .context("color expects three RGB values")?
+                    .parse()
+                    .context("RGB values must be integers from 0 to 255")?;
+            }
+            if parts.next().is_some() {
+                bail!("color expects exactly three RGB values");
+            }
+            settings.custom_color = Some(rgb);
+        }
+    }
+    Ok(())
 }
 
 fn queue_snapshot(command: &str, pending: &mut Vec<PathBuf>) {
@@ -75,7 +137,7 @@ fn process_commands(
             "S" => settings.saturation = (settings.saturation - 0.25).max(0.0),
             "m" => settings.mirror = !settings.mirror,
             "i" => settings.invert = !settings.invert,
-            "c" => settings.color = settings.color.next(),
+            "c" => settings.custom_color = None,
             "v" => controls.camera_change = true,
             "save" => match config::save(config_path, args, settings, input) {
                 Ok(()) => eprintln!("Settings saved to {}", config_path.display()),
@@ -83,7 +145,30 @@ fn process_commands(
             },
             "q" | "quit" => controls.running = false,
             "" => {}
-            "help" => eprintln!("1/2/3 ramp, +/- cell size, b/B brightness, s/S saturation, m mirror, i invert, c color, v next camera, shot [file.png], save, q quit"),
+            "help" => eprintln!("Shortcuts: 1/2/3, +/-, b/B, s/S, m, i, c (camera color), v. Setters: cell N, brightness N, saturation N, color camera|R G B, ramp CHARS, preset NAME, mirror on|off, invert on|off, input PATH. Also: shot [file.png], save, q."),
+            other if other.starts_with("color ") => if let Err(error) = set_color(other[6..].trim(), settings) { eprintln!("{error:#}"); },
+            other if other.starts_with("cell ") => set_usize(other, "cell", 8, settings.max_cell, &mut settings.cell),
+            other if other.starts_with("brightness ") => set_float(other, "brightness", 0.5, 2.0, &mut settings.brightness),
+            other if other.starts_with("saturation ") => set_float(other, "saturation", 0.0, 5.0, &mut settings.saturation),
+            other if other.starts_with("ramp ") => {
+                let ramp = other[5..].chars().collect::<Vec<_>>();
+                if ramp.is_empty() || ramp.iter().any(|ch| !ch.is_ascii() || (!ch.is_ascii_graphic() && *ch != ' ')) {
+                    eprintln!("ramp needs printable ASCII characters");
+                } else { settings.ramp = ramp; }
+            }
+            other if other.starts_with("preset ") => match other[7..].trim() {
+                "classic" => settings.ramp = args::RampPreset::Classic.chars().chars().collect(),
+                "dense" => settings.ramp = args::RampPreset::Dense.chars().chars().collect(),
+                "binary" => settings.ramp = args::RampPreset::Binary.chars().chars().collect(),
+                name => eprintln!("unknown preset '{name}'; use classic, dense, or binary"),
+            },
+            other if other.starts_with("mirror ") => set_toggle(other, "mirror", &mut settings.mirror),
+            other if other.starts_with("invert ") => set_toggle(other, "invert", &mut settings.invert),
+            other if other.starts_with("input ") => {
+                let path = other[6..].trim();
+                if path.is_empty() { eprintln!("usage: input /dev/videoN"); }
+                else { controls.selected_input = Some(path.to_owned()); }
+            }
             other => eprintln!("Unknown command '{other}'. Type help + Enter for controls."),
         }
     }
@@ -135,6 +220,11 @@ fn main() -> Result<()> {
     {
         bail!("ramp must contain printable ASCII characters only");
     }
+    if let Some(rgb) = &args.rgb {
+        if rgb.len() != 3 {
+            bail!("--rgb needs exactly three values: R G B (0-255)");
+        }
+    }
     if !args.saturation.is_finite() || !(0.0..=5.0).contains(&args.saturation) {
         bail!("saturation must be between 0 and 5");
     }
@@ -162,7 +252,7 @@ fn main() -> Result<()> {
         brightness: args.brightness,
         mirror: args.mirror,
         invert: args.invert,
-        color: args.color,
+        custom_color: args.rgb.as_ref().map(|rgb| [rgb[0], rgb[1], rgb[2]]),
         ramp,
     };
     let devices = camera::available_inputs();
@@ -244,6 +334,7 @@ fn main() -> Result<()> {
     let mut controls = Controls {
         running: true,
         camera_change: false,
+        selected_input: None,
         pending_snapshots: Vec::new(),
     };
     eprintln!(
@@ -272,13 +363,24 @@ fn main() -> Result<()> {
         if !controls.running {
             break Ok(());
         }
-        if controls.camera_change && !devices.is_empty() {
-            let current = devices
-                .iter()
-                .position(|device| device == &input_path)
-                .unwrap_or(usize::MAX);
-            let next = devices[(current.wrapping_add(1)) % devices.len()].clone();
+        if controls.camera_change || controls.selected_input.is_some() {
+            let next = if let Some(path) = controls.selected_input.take() {
+                path
+            } else if !devices.is_empty() {
+                let current = devices
+                    .iter()
+                    .position(|device| device == &input_path)
+                    .unwrap_or(usize::MAX);
+                devices[(current.wrapping_add(1)) % devices.len()].clone()
+            } else {
+                eprintln!("no other camera was found");
+                input_path.clone()
+            };
             if next != input_path {
+                if !std::path::Path::new(&next).exists() {
+                    eprintln!("input device {next} does not exist");
+                    continue;
+                }
                 let next_capture = match camera::start_capture(&next, &args) {
                     Ok(child) => child,
                     Err(error) => break Err(error),

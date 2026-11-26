@@ -196,6 +196,7 @@ fn child(program: &str, args: &[&str]) -> Result<Child> {
     let mut command = Command::new(program);
     signals::ignore_in_child(&mut command);
     command
+        .stdin(Stdio::null())
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -210,6 +211,7 @@ pub fn start_capture(input: &str, args: &Args) -> Result<Child> {
         "ffmpeg",
         &[
             "-hide_banner",
+            "-nostdin",
             "-loglevel",
             "error",
             "-f",

@@ -1,6 +1,7 @@
 use crate::signals;
 use anyhow::{bail, Context, Result};
 use std::{
+    fs,
     io::Write,
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -36,6 +37,13 @@ pub fn requested_path(argument: Option<&str>) -> Result<PathBuf> {
 }
 
 pub fn save_png(frame: &[u8], width: usize, height: usize, path: &Path) -> Result<()> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("creating screenshot directory {}", parent.display()))?;
+    }
     let size = format!("{width}x{height}");
     let mut command = Command::new("ffmpeg");
     signals::ignore_in_child(&mut command);

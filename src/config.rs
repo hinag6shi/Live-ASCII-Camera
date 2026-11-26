@@ -1,4 +1,4 @@
-use crate::args::{Args, ColorStyle, Settings};
+use crate::args::{Args, Settings};
 use anyhow::{bail, Context, Result};
 use std::{
     collections::HashMap,
@@ -119,16 +119,15 @@ pub fn load(args: &mut Args) -> Result<()> {
                 .with_context(|| "invalid 'invert' in config; use true or false")?;
         }
     }
-    if !has_cli_option("--color") {
-        if let Some(value) = values.get("color") {
-            args.color = match value.as_str() {
-                "camera" => ColorStyle::Camera,
-                "green" => ColorStyle::Green,
-                "amber" => ColorStyle::Amber,
-                "blue" => ColorStyle::Blue,
-                "gray" => ColorStyle::Gray,
-                _ => bail!("invalid 'color' in config: {value}"),
-            };
+    if !has_cli_option("--rgb") {
+        if let Some(value) = values.get("rgb").filter(|value| !value.is_empty()) {
+            args.rgb = Some(
+                value
+                    .split(',')
+                    .map(|part| part.parse::<u8>())
+                    .collect::<std::result::Result<Vec<_>, _>>()
+                    .with_context(|| "invalid 'rgb' in config; use R,G,B values from 0 to 255")?,
+            );
         }
     }
     if !has_cli_option("--ramp") && !has_cli_option("--ramp-preset") {
@@ -152,16 +151,13 @@ pub fn save(path: &Path, args: &Args, settings: &Settings, input: &str) -> Resul
     {
         fs::create_dir_all(parent).context("creating config directory")?;
     }
-    let color = match settings.color {
-        ColorStyle::Camera => "camera",
-        ColorStyle::Green => "green",
-        ColorStyle::Amber => "amber",
-        ColorStyle::Blue => "blue",
-        ColorStyle::Gray => "gray",
-    };
     let ramp = settings.ramp.iter().collect::<String>();
+    let rgb = settings
+        .custom_color
+        .map(|rgb| format!("{},{},{}", rgb[0], rgb[1], rgb[2]))
+        .unwrap_or_default();
     let contents = format!(
-        "input={input}\nname={}\nwidth={}\nheight={}\nfps={}\ncell={}\nbrightness={}\nsaturation={}\nmirror={}\ninvert={}\ncolor={color}\nramp={ramp}\n",
+        "input={input}\nname={}\nwidth={}\nheight={}\nfps={}\ncell={}\nbrightness={}\nsaturation={}\nmirror={}\ninvert={}\nrgb={rgb}\nramp={ramp}\n",
         args.name, args.width, args.height, args.fps, settings.cell,
         settings.brightness, settings.saturation, settings.mirror, settings.invert
     );

@@ -1,4 +1,4 @@
-use crate::args::{ColorStyle, Settings};
+use crate::args::Settings;
 use font8x8::{UnicodeFonts, BASIC_FONTS};
 
 pub fn render(src: &[u8], dst: &mut [u8], width: usize, height: usize, settings: &Settings) {
@@ -48,7 +48,7 @@ pub fn render(src: &[u8], dst: &mut [u8], width: usize, height: usize, settings:
                         };
                         let color = style_color(
                             vivid_color(source_rgb, settings.saturation, settings.brightness),
-                            settings.color,
+                            settings.custom_color,
                         );
                         dst[pixel..pixel + 3].copy_from_slice(&color);
                     }
@@ -58,21 +58,13 @@ pub fn render(src: &[u8], dst: &mut [u8], width: usize, height: usize, settings:
     }
 }
 
-fn style_color(rgb: [u8; 3], style: ColorStyle) -> [u8; 3] {
-    if matches!(style, ColorStyle::Camera) {
-        return rgb;
+fn style_color(rgb: [u8; 3], custom: Option<[u8; 3]>) -> [u8; 3] {
+    if let Some(tint) = custom {
+        let luminance = (rgb[0] as u32 * 2126 + rgb[1] as u32 * 7152 + rgb[2] as u32 * 722) / 10000;
+        let level = (48.0 + (luminance as f32 / 255.0).sqrt() * 207.0) / 255.0;
+        return tint.map(|component| (component as f32 * level).round() as u8);
     }
-    let luminance = (rgb[0] as u32 * 2126 + rgb[1] as u32 * 7152 + rgb[2] as u32 * 722) / 10000;
-    let level = (48.0 + (luminance as f32 / 255.0).sqrt() * 207.0)
-        .round()
-        .clamp(0.0, 255.0) as u8;
-    match style {
-        ColorStyle::Camera => rgb,
-        ColorStyle::Green => [level / 4, level, level / 3],
-        ColorStyle::Amber => [level, (level as u16 * 3 / 4) as u8, level / 6],
-        ColorStyle::Blue => [level / 5, (level as u16 * 2 / 3) as u8, level],
-        ColorStyle::Gray => [level; 3],
-    }
+    rgb
 }
 
 fn vivid_color(rgb: [u8; 3], saturation_gain: f32, brightness: f32) -> [u8; 3] {
