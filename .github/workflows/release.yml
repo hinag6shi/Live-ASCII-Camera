@@ -22,8 +22,16 @@ jobs:
       - name: Check tag matches Cargo version
         shell: bash
         run: |
-          cargo_version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "ascii-virtual-camera") | .version')"
-          test "$GITHUB_REF_NAME" = "v$cargo_version"
+          cargo_version="$(awk '/^\[package\]/{package=1; next} /^\[/{package=0} package && /^version[[:space:]]*=/{gsub(/"/, "", $3); print $3; exit}' Cargo.toml)"
+          if [[ -z "$cargo_version" ]]; then
+            echo "Could not read package version from Cargo.toml" >&2
+            exit 1
+          fi
+          expected_tag="v$cargo_version"
+          if [[ "$GITHUB_REF_NAME" != "$expected_tag" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match Cargo.toml version ($expected_tag)" >&2
+            exit 1
+          fi
 
       - name: Build optimized binary
         run: cargo build --locked --release

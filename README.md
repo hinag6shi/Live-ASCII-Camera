@@ -76,11 +76,11 @@ cargo build --release
 
 ## Установка готового релиза
 
-Откройте раздел **Releases** репозитория и скачайте архив вида `ascii-virtual-camera-v0.2.0-linux-x86_64.tar.gz` вместе с файлом `.sha256`.
+Откройте раздел **Releases** репозитория и скачайте архив вида `ascii-virtual-camera-v0.3.0-linux-x86_64.tar.gz` вместе с файлом `.sha256`.
 
 ```sh
-sha256sum -c ascii-virtual-camera-v0.2.0-linux-x86_64.tar.gz.sha256
-tar -xzf ascii-virtual-camera-v0.2.0-linux-x86_64.tar.gz
+sha256sum -c ascii-virtual-camera-v0.3.0-linux-x86_64.tar.gz.sha256
+tar -xzf ascii-virtual-camera-v0.3.0-linux-x86_64.tar.gz
 ./ascii-virtual-camera
 ```
 
@@ -255,7 +255,7 @@ cargo build --release
 
 Файл `.github/workflows/release.yml` запускается, когда в GitHub отправляется тег `v*`. Он проверяет соответствие тега версии в `Cargo.toml`, собирает Linux x86_64 бинарник, упаковывает его вместе с README, считает SHA-256 и создаёт GitHub Release с автоматически сформированными notes. Workflow запрашивает только `contents: write`, чтобы создать релиз и загрузить файлы.
 
-Чтобы выпустить версию `0.2.0`, сначала измените `version` в `Cargo.toml`, затем соберите проект (это обновит `Cargo.lock`) и зафиксируйте изменения:
+Чтобы выпустить версию `0.3.0`, сначала задайте её в `Cargo.toml`, затем соберите проект (это обновит `Cargo.lock`) и зафиксируйте изменения:
 
 ```sh
 git add Cargo.toml Cargo.lock README.md src .github/workflows/release.yml
@@ -266,8 +266,8 @@ git push origin main
 После этого поставьте и отправьте тег, который **точно совпадает** с версией Cargo:
 
 ```sh
-git tag -a v0.2.0 -m "v0.2.0"
-git push origin v0.2.0
+git tag -a v0.3.0 -m "v0.3.0"
+git push origin v0.3.0
 ```
 
 Когда GitHub Actions завершится, архив и контрольная сумма появятся на странице **Releases**. Для создания релиза workflow нужен `contents: write`; это разрешение указано в YAML. Если настройки организации ограничивают токен только чтением, владелец репозитория должен разрешить запись в **Settings → Actions → General → Workflow permissions** ([документация GitHub](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions)).
